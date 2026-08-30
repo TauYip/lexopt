@@ -443,8 +443,6 @@ fn bin_name() {
 
 #[test]
 fn test_errors() {
-    use super::Error;
-
     assert_eq!(
         Arg::Short('o').unexpected().to_string(),
         "invalid option '-o'",
@@ -457,15 +455,6 @@ fn test_errors() {
         Arg::Value("foo".into()).unexpected().to_string(),
         r#"unexpected argument "foo""#,
     );
-    assert_eq!(
-        Error::from("this is an error message").to_string(),
-        "this is an error message",
-    );
-    assert_eq!(
-        Error::from("this is an error message".to_owned()).to_string(),
-        "this is an error message",
-    );
-    assert!(Error::from("this is an error message").source().is_some());
     assert!(Arg::Short('o').unexpected().source().is_none());
     assert_eq!(
         format!("{:?}", Arg::Short('o').unexpected()),

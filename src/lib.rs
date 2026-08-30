@@ -412,14 +412,6 @@ impl Arg<'_> {
 }
 
 /// An error during argument parsing.
-///
-/// This implements `From<String>` and `From<&str>`, for easy ad-hoc error
-/// messages.
-//
-// This is not #[non_exhaustive] because of the MSRV. I'm hoping no more
-// variants will turn out to be needed: this seems reasonable, if the scope
-// of the library doesn't change. Worst case scenario it can be stuffed inside
-// Error::Custom.
 pub enum Error {
     /// An option argument was expected but was not found.
     MissingValue {
@@ -440,14 +432,6 @@ pub enum Error {
         /// The value.
         value: String,
     },
-
-    /// A value was found that was not valid unicode.
-    ///
-    /// This can be returned by the methods on [`ValueExt`].
-    NonUnicodeValue(String),
-
-    /// For custom error messages in application code.
-    Custom(Box<dyn core::error::Error + Send + Sync + 'static>),
 }
 
 impl core::fmt::Display for Error {
@@ -469,8 +453,6 @@ impl core::fmt::Display for Error {
                     option, value
                 )
             }
-            NonUnicodeValue(value) => write!(f, "argument is invalid unicode: {:?}", value),
-            Custom(err) => write!(f, "{}", err),
         }
     }
 }
@@ -482,26 +464,7 @@ impl core::fmt::Debug for Error {
     }
 }
 
-impl core::error::Error for Error {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        match self {
-            Error::Custom(error) => Some(error.as_ref()),
-            _ => None,
-        }
-    }
-}
-
-impl From<String> for Error {
-    fn from(msg: String) -> Self {
-        Error::Custom(msg.into())
-    }
-}
-
-impl<'a> From<&'a str> for Error {
-    fn from(msg: &'a str) -> Self {
-        Error::Custom(msg.into())
-    }
-}
+impl core::error::Error for Error {}
 
 #[cfg(test)]
 mod tests;
