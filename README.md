@@ -19,11 +19,11 @@ The following conventions are supported:
 - Long options (`--verbose`)
 - `--` to mark the end of options
 - `=` to separate options from values (`--option=value`, `-o=value`)
-  - The nonstandard `-o=value` syntax can be [disabled](https://docs.rs/lexopt/latest/lexopt/struct.Parser.html#method.set_short_equals).
+  - The nonstandard `-o=value` syntax can be disabled by `Parser::set_short_equals()`.
 - Spaces to separate options from values (`--option value`, `-o value`)
 - Unseparated short options (`-ovalue`)
 - Combined short options (`-abc` to mean `-a -b -c`)
-- Options with optional arguments (like GNU sed's `-i`, which can be used standalone or as `-iSUFFIX`) ([`Parser::optional_value()`](https://docs.rs/lexopt/latest/lexopt/struct.Parser.html#method.optional_value))
+- Options with optional arguments (like GNU sed's `-i`, which can be used standalone or as `-iSUFFIX`) (`Parser::optional_value()`)
 
 These are not supported out of the box:
 - Single-dash long options (like find's `-name`)
