@@ -243,7 +243,15 @@ where
                 self.state = State::PendingValue(value.to_owned());
                 arg.truncate(ind);
             }
-            Ok(Some(self.set_long(arg)))
+            self.last_option = LastOption::Long(arg);
+            let LastOption::Long(ref option) = self.last_option else {
+                // SAFETY: ensured by above.
+                unsafe { core::hint::unreachable_unchecked() }
+            };
+            // SAFETY: ensured by the outer `if`.
+            Ok(Some(Arg::Long(unsafe {
+                option.get_unchecked("--".len()..)
+            })))
         } else if arg.len() > 1 && arg.starts_with('-') {
             self.state = State::Shorts(arg.into_bytes(), 1);
             self.next()
@@ -342,21 +350,6 @@ where
                 None
             }
             State::None => None,
-        }
-    }
-
-    /// Store a long option so the caller can borrow it.
-    fn set_long(&mut self, option: String) -> Arg<'_> {
-        self.last_option = LastOption::Long(option);
-        core::debug_assert_matches!(self.last_option, LastOption::Long(_));
-        match self.last_option {
-            LastOption::Long(ref option) => {
-                // SAFETY: internal implementation should ensure this.
-                debug_assert!(option.starts_with("--"));
-                Arg::Long(unsafe { option.get_unchecked(2..) })
-            }
-            // SAFETY: internal implementation should ensure this.
-            _ => unsafe { core::hint::unreachable_unchecked() },
         }
     }
 
