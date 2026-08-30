@@ -85,7 +85,7 @@ enum State {
     /// We have a value left over from `--option=value`.
     PendingValue(String),
     /// We're in the middle of `-abc`.
-    Shorts(Vec<u8>, usize),
+    Shorts(String, usize),
     /// We saw `--` and know no more options are coming.
     FinishedOpts,
 }
@@ -185,8 +185,12 @@ where
             State::Shorts(ref arg, ref mut pos) => {
                 // We're somewhere inside a `-abc` chain. Because we're in `.next()`,
                 // not `.value()`, we can assume that the next character is another option.
-                match first_codepoint(&arg[*pos..]) {
-                    Ok(None) => {
+
+                // SAFETY: internal implementation ensures `pos` is always valid char boundary.
+                unsafe { core::hint::assert_unchecked(arg.is_char_boundary(*pos)) };
+                let arg = &arg[*pos..];
+                match arg.chars().next() {
+                    None => {
                         self.state = State::None;
                     }
                     // If we find `-=[...]` we interpret it as an option.
@@ -195,26 +199,16 @@ where
                     // Though if you have one you should maybe disable short_equals.)
                     // `clap` always interprets it as a short flag in this case, but
                     // that feels sloppy.
-                    Ok(Some('=')) if *pos > 1 && self.short_equals => {
+                    Some('=') if *pos > 1 && self.short_equals => {
                         return Err(Error::UnexpectedValue {
                             option: self.format_last_option().unwrap(),
                             value: self.optional_value().unwrap(),
                         });
                     }
-                    Ok(Some(ch)) => {
+                    Some(ch) => {
                         *pos += ch.len_utf8();
                         self.last_option = LastOption::Short(ch);
                         return Ok(Some(Arg::Short(ch)));
-                    }
-                    Err(err) => {
-                        // Advancing may allow recovery.
-                        // This is a little iffy, there might be more bad unicode next.
-                        match err.error_len() {
-                            Some(len) => *pos += len,
-                            None => *pos = arg.len(),
-                        }
-                        self.last_option = LastOption::Short('�');
-                        return Ok(Some(Arg::Short('�')));
                     }
                 }
             }
@@ -238,8 +232,11 @@ where
         if arg.starts_with("--") {
             // Long options have two forms: `--option` and `--option=value`.
             if let Some(ind) = arg.find('=') {
-                // SAFETY: length of `=` is 1 so range `ind + 1..` is always valid.
-                let value = unsafe { arg.get_unchecked(ind + 1..) };
+                // SAFETY:
+                // `ind` is valid and length of `=` is 1
+                // thus `ind + 1` is always valid char boundary.
+                unsafe { core::hint::assert_unchecked(arg.is_char_boundary(ind + 1)) };
+                let value = &arg[ind + 1..];
                 self.state = State::PendingValue(value.to_owned());
                 arg.truncate(ind);
             }
@@ -248,12 +245,11 @@ where
                 // SAFETY: ensured by above.
                 unsafe { core::hint::unreachable_unchecked() }
             };
-            // SAFETY: ensured by the outer `if`.
-            Ok(Some(Arg::Long(unsafe {
-                option.get_unchecked("--".len()..)
-            })))
+            // SAFETY: because `option` starts with "--" whose length is 2 .
+            unsafe { core::hint::assert_unchecked(option.is_char_boundary(2)) };
+            Ok(Some(Arg::Long(&option[2..])))
         } else if arg.len() > 1 && arg.starts_with('-') {
-            self.state = State::Shorts(arg.into_bytes(), 1);
+            self.state = State::Shorts(arg, 1);
             self.next()
         } else {
             Ok(Some(Arg::Value(arg)))
@@ -326,22 +322,17 @@ where
         match core::mem::replace(&mut self.state, State::None) {
             State::PendingValue(value) => Some((value, true)),
             State::Shorts(mut arg, mut pos) => {
-                if pos >= arg.len() {
-                    return None;
-                }
+                let pos_byte = arg.as_bytes().get(pos)?;
                 let mut had_eq_sign = false;
-                if arg[pos] == b'=' && self.short_equals {
+                if *pos_byte == b'=' && self.short_equals {
                     // -o=value.
                     // clap actually strips out all leading '='s, but that seems silly.
                     // We allow `-xo=value`. Python's argparse doesn't strip the = in that case.
                     pos += 1;
                     had_eq_sign = true;
                 }
-                // Move `arg[pos..]` forward to reuse allocation.
+                // Move `arg[pos..]` to `0..` to reuse allocation.
                 arg.drain(..pos);
-                // SAFETY: internal implementation should ensure this.
-                debug_assert!(str::from_utf8(&arg).is_ok());
-                let arg = unsafe { String::from_utf8_unchecked(arg) };
                 Some((arg, had_eq_sign))
             }
             State::FinishedOpts => {
@@ -510,21 +501,6 @@ impl<'a> From<&'a str> for Error {
     fn from(msg: &'a str) -> Self {
         Error::Custom(msg.into())
     }
-}
-
-///
-/// Take the first codepoint from a UTF-8 bytestring.
-///
-/// The rest of the bytestring does not have to be valid unicode.
-fn first_codepoint(bytes: &[u8]) -> Result<Option<char>, core::str::Utf8Error> {
-    // We only need the first 4 bytes
-    let bytes = bytes.get(..4).unwrap_or(bytes);
-    let text = match str::from_utf8(bytes) {
-        Ok(text) => text,
-        Err(err) if err.valid_up_to() > 0 => str::from_utf8(&bytes[..err.valid_up_to()]).unwrap(),
-        Err(err) => return Err(err),
-    };
-    Ok(text.chars().next())
 }
 
 #[cfg(test)]
