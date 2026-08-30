@@ -4,11 +4,24 @@
 
 use std::{path::PathBuf, str::FromStr};
 
-const HELP: &str = "cargo [+toolchain] [OPTIONS] [SUBCOMMAND]";
+use lexopt::{Arg, Parser};
 
-fn main() -> Result<(), lexopt::Error> {
-    use lexopt::prelude::*;
+use Arg::*;
 
+type Error = Box<dyn core::error::Error>;
+
+const HELP: &str = "\
+Usage: cargo [+toolchain] [OPTIONS] [SUBCOMMAND]
+
+OPTIONS:
+    -h, --help         print usage.
+    --color <COLOR>    set color
+    --offline          set offline
+    --quiet            execute in quiet mode
+    --verbose          execute in verbose mode
+";
+
+fn main() -> Result<(), Error> {
     let mut settings = GlobalSettings {
         toolchain: "stable".to_owned(),
         color: Color::Auto,
@@ -17,11 +30,17 @@ fn main() -> Result<(), lexopt::Error> {
         verbose: false,
     };
 
-    let mut parser = lexopt::Parser::from_env();
+    let mut parser = Parser::new(std::env::args());
     while let Some(arg) = parser.next()? {
         match arg {
+            Long("help") | Short('h') => {
+                println!("{}", HELP);
+                std::process::exit(0);
+            }
             Long("color") => {
-                settings.color = parser.value()?.parse()?;
+                let mut value = parser.value()?;
+                value.make_ascii_lowercase();
+                settings.color = value.parse()?;
             }
             Long("offline") => {
                 settings.offline = true;
@@ -34,25 +53,18 @@ fn main() -> Result<(), lexopt::Error> {
                 settings.verbose = true;
                 settings.quiet = false;
             }
-            Long("help") => {
-                println!("{}", HELP);
-                std::process::exit(0);
-            }
-            Value(value) => {
-                let value = value.string()?;
-                match value.as_str() {
-                    value if value.starts_with('+') => {
-                        settings.toolchain = value[1..].to_owned();
-                    }
-                    "install" => {
-                        return install(settings, parser);
-                    }
-                    value => {
-                        return Err(format!("unknown subcommand '{}'", value).into());
-                    }
+            Value(value) => match value.as_str() {
+                value if value.starts_with('+') => {
+                    settings.toolchain = value[1..].to_owned();
                 }
-            }
-            _ => return Err(arg.unexpected()),
+                "install" => {
+                    return install(settings, parser);
+                }
+                value => {
+                    return Err(format!("unknown subcommand '{}'", value).into());
+                }
+            },
+            _ => return Err(arg.unexpected().into()),
         }
     }
 
@@ -69,17 +81,21 @@ struct GlobalSettings {
     verbose: bool,
 }
 
-fn install(settings: GlobalSettings, mut parser: lexopt::Parser) -> Result<(), lexopt::Error> {
-    use lexopt::prelude::*;
-
+// Subcommand.
+fn install(settings: GlobalSettings, mut parser: Parser) -> Result<(), Error> {
+    // Subcommand settings.
     let mut package: Option<String> = None;
     let mut root: Option<PathBuf> = None;
     let mut jobs: u16 = get_no_of_cpus();
 
     while let Some(arg) = parser.next()? {
         match arg {
+            Long("help") | Short('h') => {
+                println!("cargo install [OPTIONS] CRATE");
+                std::process::exit(0);
+            }
             Value(value) if package.is_none() => {
-                package = Some(value.string()?);
+                package = Some(value);
             }
             Long("root") => {
                 root = Some(parser.value()?.into());
@@ -87,11 +103,7 @@ fn install(settings: GlobalSettings, mut parser: lexopt::Parser) -> Result<(), l
             Short('j') | Long("jobs") => {
                 jobs = parser.value()?.parse()?;
             }
-            Long("help") => {
-                println!("cargo install [OPTIONS] CRATE");
-                std::process::exit(0);
-            }
-            _ => return Err(arg.unexpected()),
+            _ => return Err(arg.unexpected().into()),
         }
     }
 
@@ -119,7 +131,7 @@ impl FromStr for Color {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
+        match s {
             "auto" => Ok(Color::Auto),
             "always" => Ok(Color::Always),
             "never" => Ok(Color::Never),
