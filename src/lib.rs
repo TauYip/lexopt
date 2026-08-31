@@ -176,9 +176,7 @@ where
                 let value = core::mem::take(value);
                 self.state = State::None;
                 return Err(Error::UnexpectedValue {
-                    option: self
-                        .format_last_option()
-                        .expect("Should only have pending value after long option"),
+                    option: self.format_last_option().unwrap_or_default(),
                     value,
                 });
             }
