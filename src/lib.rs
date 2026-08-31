@@ -313,27 +313,19 @@ where
     /// Get a value only if it's concatenated to an option, as in `-ovalue` or
     /// `--option=value` or `-o=value`, but not `-o value` or `--option value`.
     pub fn optional_value(&mut self) -> Option<String> {
-        Some(self.raw_optional_value()?.0)
-    }
-
-    /// [`Parser::optional_value`], but indicate whether the value was joined
-    /// with an = sign. This matters for [`Parser::values`].
-    fn raw_optional_value(&mut self) -> Option<(String, bool)> {
         match core::mem::replace(&mut self.state, State::None) {
-            State::PendingValue(value) => Some((value, true)),
+            State::PendingValue(value) => Some(value),
             State::Shorts(mut arg, mut pos) => {
                 let pos_byte = arg.as_bytes().get(pos)?;
-                let mut had_eq_sign = false;
                 if *pos_byte == b'=' && self.short_equals {
                     // -o=value.
                     // clap actually strips out all leading '='s, but that seems silly.
                     // We allow `-xo=value`. Python's argparse doesn't strip the = in that case.
                     pos += 1;
-                    had_eq_sign = true;
                 }
                 // Move `arg[pos..]` to `0..` to reuse allocation.
                 arg.drain(..pos);
-                Some((arg, had_eq_sign))
+                Some(arg)
             }
             State::FinishedOpts => {
                 // Not really supposed to be here, but it's benign and not our fault
