@@ -14,11 +14,14 @@ const HELP: &str = "\
 Usage: cargo [+toolchain] [OPTIONS] [SUBCOMMAND]
 
 OPTIONS:
-    -h, --help         print usage.
-    --color <COLOR>    set color
+    -h, --help         print usage
+    --color <COLOR>    set color [possible values: auto, always, never]
     --offline          set offline
     --quiet            execute in quiet mode
     --verbose          execute in verbose mode
+
+SUBCOMMANDS:
+    install            install something
 ";
 
 fn main() -> Result<(), Error> {
@@ -54,8 +57,8 @@ fn main() -> Result<(), Error> {
                 settings.quiet = false;
             }
             Value(value) => match value.as_str() {
-                value if value.starts_with('+') => {
-                    settings.toolchain = value[1..].to_owned();
+                value if let Some(value) = value.strip_prefix('+') => {
+                    settings.toolchain = value.to_owned();
                 }
                 "install" => {
                     return install(settings, parser);
@@ -81,6 +84,15 @@ struct GlobalSettings {
     verbose: bool,
 }
 
+const INSTALL_HELP: &str = "\
+Usage: cargo install [OPTIONS] <CRATE>
+
+OPTIONS:
+    -h, --help      print usage
+    --root          prefix of installation
+    -j, --jobs <N>  number of parallel jobs [default: number of CPUs]
+";
+
 // Subcommand.
 fn install(settings: GlobalSettings, mut parser: Parser) -> Result<(), Error> {
     // Subcommand settings.
@@ -91,11 +103,11 @@ fn install(settings: GlobalSettings, mut parser: Parser) -> Result<(), Error> {
     while let Some(arg) = parser.next()? {
         match arg {
             Long("help") | Short('h') => {
-                println!("cargo install [OPTIONS] CRATE");
+                println!("{}", INSTALL_HELP);
                 std::process::exit(0);
             }
-            Value(value) if package.is_none() => {
-                package = Some(value);
+            Value(crate_name) if package.is_none() => {
+                package = Some(crate_name);
             }
             Long("root") => {
                 root = Some(parser.value()?.into());
@@ -110,7 +122,7 @@ fn install(settings: GlobalSettings, mut parser: Parser) -> Result<(), Error> {
     println!("Settings: {:#?}", settings);
     println!(
         "Installing {} into {:?} with {} jobs",
-        package.ok_or("missing CRATE argument")?,
+        package.ok_or("missing <CRATE> argument")?,
         root,
         jobs
     );
@@ -136,7 +148,7 @@ impl FromStr for Color {
             "always" => Ok(Color::Always),
             "never" => Ok(Color::Never),
             _ => Err(format!(
-                "Invalid style '{}' [pick from: auto, always, never]",
+                "Invalid style '{}' [possible values: auto, always, never]",
                 s
             )),
         }
