@@ -229,14 +229,10 @@ where
         let mut arg = arg;
         if arg.starts_with("--") {
             // Long options have two forms: `--option` and `--option=value`.
-            if let Some(ind) = arg.find('=') {
-                // SAFETY:
-                // `ind` is valid and length of `=` is 1
-                // thus `ind + 1` is always valid char boundary.
-                unsafe { core::hint::assert_unchecked(arg.is_char_boundary(ind + 1)) };
-                let value = &arg[ind + 1..];
-                self.state = State::PendingValue(value.to_owned());
-                arg.truncate(ind);
+            if let Some((left, right)) = arg.split_once('=') {
+                self.state = State::PendingValue(right.to_owned());
+                // Reuse allocation.
+                arg.truncate(left.len());
             }
             self.last_option = LastOption::Long(arg);
             let LastOption::Long(ref option) = self.last_option else {
