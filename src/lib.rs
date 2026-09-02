@@ -185,8 +185,8 @@ where
                 // not `.value()`, we can assume that the next character is another option.
 
                 // SAFETY: internal implementation ensures `pos` is always valid char boundary.
-                unsafe { core::hint::assert_unchecked(arg.is_char_boundary(*pos)) };
-                let arg = &arg[*pos..];
+                debug_assert!(arg.is_char_boundary(*pos));
+                let arg = unsafe { arg.get_unchecked(*pos..) };
                 match arg.chars().next() {
                     None => {
                         self.state = State::None;
@@ -236,12 +236,12 @@ where
             }
             self.last_option = LastOption::Long(arg);
             let LastOption::Long(ref option) = self.last_option else {
-                // SAFETY: ensured by above.
-                unsafe { core::hint::unreachable_unchecked() }
+                unreachable!()
             };
             // SAFETY: because `option` starts with "--" whose length is 2 .
-            unsafe { core::hint::assert_unchecked(option.is_char_boundary(2)) };
-            Ok(Some(Arg::Long(&option[2..])))
+            debug_assert!(option.is_char_boundary(2));
+            let option = unsafe { option.get_unchecked(2..) };
+            Ok(Some(Arg::Long(option)))
         } else if arg.len() > 1 && arg.starts_with('-') {
             self.state = State::Shorts(arg, 1);
             self.next()
