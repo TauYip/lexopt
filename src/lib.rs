@@ -232,7 +232,10 @@ where
             if let Some((left, right)) = arg.split_once('=') {
                 self.state = State::PendingValue(right.to_owned());
                 // Reuse allocation.
-                arg.truncate(left.len());
+                // SAFETY: ensured by `str::split_once`.
+                let new_len = left.len();
+                debug_assert!(arg.is_char_boundary(new_len));
+                unsafe { arg.as_mut_vec().set_len(new_len) };
             }
             self.last_option = LastOption::Long(arg);
             let LastOption::Long(ref option) = self.last_option else {
