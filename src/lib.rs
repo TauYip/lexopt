@@ -199,8 +199,8 @@ where
                     // that feels sloppy.
                     Some('=') if *pos > 1 && self.short_equals => {
                         return Err(Error::UnexpectedValue {
-                            option: self.format_last_option().unwrap(),
-                            value: self.optional_value().unwrap(),
+                            option: self.format_last_option().unwrap_or_default(),
+                            value: self.optional_value().unwrap_or_default(),
                         });
                     }
                     Some(ch) => {
@@ -318,7 +318,18 @@ where
                     pos += 1;
                 }
                 // Move `arg[pos..]` to `0..` to reuse allocation.
-                arg.drain(..pos);
+                // SAFETY:
+                // As long as `pos` is valid char boundary,
+                // the following is safe.
+                debug_assert!(arg.is_char_boundary(pos));
+                unsafe {
+                    let bytes = arg.as_mut_vec();
+                    let dest = bytes.as_mut_ptr();
+                    let src = dest.add(pos);
+                    let len = bytes.len() - pos;
+                    core::ptr::copy(src, dest, len);
+                    bytes.set_len(len);
+                }
                 Some(arg)
             }
             State::FinishedOpts => {

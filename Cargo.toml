@@ -1,6 +1,6 @@
 [package]
 name = "lexopt"
-version = "0.5.3"
+version = "0.5.4"
 authors = ["TauYip"]
 description = "Minimalist command line parser"
 keywords = ["args", "arguments", "cli", "parser", "getopt"]
